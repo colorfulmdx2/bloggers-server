@@ -1,14 +1,13 @@
 import express, { Request, Response } from 'express'
+import {bloggersRepository, postRepository} from './repositories/repository'
+import {body, check, validationResult} from 'express-validator'
+import {validationMiddleware} from "./middlewares/error-handler.middleware";
+import {isNumber, isNumberBody, isString, isUrl} from "./vlidators/valildators";
+
 export const router = express.Router()
 
 
-export let bloggers = [
-    {id: 1, name: 'Klava Koka', youtubeUrl: 'youtubeUrl'},
-]
 
-export let posts = [
-    {id: 1, title: 'title', shortDescription: 'shortDescription', content: 'content', bloggerId: 1, bloggerName: 'Klava Koka'},
-]
 
 router.use(function timeLog(req, res, next) {
     console.log('Time: ', Date.now());
@@ -18,154 +17,100 @@ router.use(function timeLog(req, res, next) {
 /** BLOGGERS **/
 
 router.get('/bloggers', function(req, res) {
-    res.send(bloggers);
+    res.send(bloggersRepository.getBloggers());
 });
 
-router.post('/bloggers', (req: Request, res: Response) => {
-    const {name, youtubeUrl} = req.body
-    if (!name || !youtubeUrl) {
-        res.status(400).send({message: 'Please provide all required parameters'})
+router.post('/bloggers',[isString('name'), isUrl()], validationMiddleware, (req: Request, res: Response) => {
+    try {
+        bloggersRepository.createBlogger({...req.body})
+        res.send(201)
+    } catch (e) {
+        res.status(400).send({message: e.message})
     }
-
-    const newVideo = {
-        id: +(new Date()),
-        name: name,
-        youtubeUrl: youtubeUrl
-    }
-
-    bloggers.push(newVideo)
-    res.status(201).send(bloggers)
 })
 
-router.get('/bloggers/:id', (req: Request, res: Response) => {
-    const find = bloggers.find((e) => e.id === +req.params.id)
-    if (!find) {
-        res.status(404).send({message: `Blogger not found`})
+router.get('/bloggers/:id', isNumber('id'), validationMiddleware, (req: Request, res: Response) => {
+    try {
+       const blogger = bloggersRepository.getBlogger(req.params.id as unknown as number)
+        res.status(200).send(blogger)
+    } catch (e) {
+        res.status(404).send({message: e.message})
     }
-
-    res.status(200).send(find)
 })
 
-router.put('/bloggers/:id', (req: Request, res: Response) => {
-    const id = +req.params.id
-
-    const find = bloggers.find((e) => e.id === id)
-    if (!find) {
-        res.status(404).send({message: `Blogger not found`})
+router.put('/bloggers/:id', [isNumber('id'), isString('name'), isUrl()], validationMiddleware, (req: Request, res: Response) => {
+    try {
+        bloggersRepository.updateBlogger(
+            {id: req.params.id as unknown as number, name: req.body.name, youtubeUrl: req.body.youtubeUrl})
+        res.send(200)
+    } catch (e) {
+        res.status(404).send({message: e.message})
     }
-
-    const { name, youtubeUrl }: any = req.body
-
-    bloggers = bloggers.map((e: any) => {
-        if (+id === e.id) {
-            return {...e, youtubeUrl, name}
-        }
-        return e
-    })
-    res.status(201).send({ ...find, name, youtubeUrl })
 })
 
-router.delete('/bloggers/:id', (req: Request, res: Response) => {
-    const id = +req.params.id
-
-    const find = bloggers.find((e) => e.id === id)
-    if (!find) {
-        res.status(404).send({message: `Video not found`})
+router.delete('/bloggers/:id', isNumber('id'), validationMiddleware, (req: Request, res: Response) => {
+    try {
+        bloggersRepository.deleteBlogger(req.params.id as unknown as number)
+        res.send(200)
+    } catch (e) {
+        res.status(404).send({message: e.message})
     }
-
-    bloggers = [...bloggers.filter((e: any) => e.id !== +req.params.id)]
-    res.status(200).send(find)
 })
-
-/** POSTS **/
 
 router.get('/posts', function(req, res) {
+    const posts = postRepository.getPosts()
     res.send(posts);
 });
 
-router.post('/posts', (req: Request, res: Response) => {
-    const {title, shortDescription, content, bloggerId} = req.body
-
-    if (!title || !shortDescription || !content || !bloggerId) {
-        res.status(400).send({message: 'Please provide all required parameters'})
+router.post('/posts',[
+    isString("title"),
+    isString("shortDescription"),
+    isString("content"),
+    isString("bloggerName"),
+    isNumberBody('id'),
+    isNumberBody('bloggerId')],
+    validationMiddleware,
+    (req: Request, res: Response) => {
+    try {
+        postRepository.createPost({...req.body})
+        res.sendStatus(201)
+    } catch (e) {
+        res.status(400).send(e.message)
     }
-
-    const find = bloggers.find((e) => e.id === bloggerId)
-    if (!find) {
-        res.status(400).send({message: `Blogger doesn't exist`})
-    }
-
-    const post = {
-        id: +(new Date()),
-        shortDescription,
-        content,
-        bloggerId,
-        title,
-        bloggerName: find?.name || 'no name'
-    }
-
-    posts.push(post)
-    res.status(201).send(posts)
 })
 
-router.get('/posts/:id', (req: Request, res: Response) => {
-    const id = +req.params.id
-
-    const find = posts.find((e) => e.id === id)
-    if (!find) {
-        res.status(404).send({message: `Post not found`})
-    }
-
-    res.status(200).send(find)
+router.get('/posts/:id', isNumber('id'), validationMiddleware,  (req: Request, res: Response) => {
+   try {
+       const post = postRepository.getPost(req.params.id as unknown as number)
+       res.status(200).send(post)
+   } catch (e) {
+       res.status(404)
+   }
 })
 
-router.put('/posts/:id', (req: Request, res: Response) => {
-    const id = +req.params.id
-
-    const {title, shortDescription, content, bloggerId} = req.body
-
-    if (!title || !shortDescription || !content || !bloggerId) {
-        res.status(400).send({message: 'Please provide all required parameters'})
-    }
-
-    const findPost = posts.find((e) => e.id === id)
-    if (!findPost) {
-        res.status(400).send({message: `Post doesn't exist`})
-        return
-    }
-
-    const findBlogger = bloggers.find((e) => e.id === bloggerId)
-    if (!findBlogger) {
-        res.status(400).send({message: `Blogger with this id doesn't exist`})
-    }
-
-    posts = posts.map((e) => {
-     if (e.id === id) {
-         return  {
-             ...findPost,
-             shortDescription,
-             content,
-             bloggerId,
-             title,
-             bloggerName: findBlogger?.name || 'no name'
-         }
-     }
-     return e
-    })
-
-    res.status(201).send(posts)
+router.put('/posts/:id',
+[
+    isNumber('id'),
+    isString("title"),
+    isString("shortDescription"),
+    isString("content"),
+    isNumberBody('bloggerId')],
+    validationMiddleware, (req: Request, res: Response) => {
+   try {
+       postRepository.updatePost({id: req.params.id, ...req.body})
+       res.send(200)
+   } catch (e) {
+       res.send(404)
+   }
 })
 
-router.delete('/posts/:id', (req: Request, res: Response) => {
-    const id = +req.params.id
-
-    const find = posts.find((e) => e.id === id)
-    if (!find) {
-        res.status(404).send({message: `Post not found`})
-    }
-
-    posts = [...posts.filter((e: any) => e.id !== +req.params.id)]
-    res.status(200).send(find)
+router.delete('/posts/:id', isNumber('id'), (req: Request, res: Response) => {
+   try {
+       postRepository.deletePost(req.params.id as unknown as number)
+       res.send(200)
+   } catch (e) {
+       res.status(404).send(e.message)
+   }
 })
 
 
